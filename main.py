@@ -4,7 +4,7 @@ import logging
 import datetime
 import dateparser
 from apscheduler.schedulers.background import BackgroundScheduler
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 import torch
 
 # تنظیمات لاگ‌گیری
@@ -15,21 +15,22 @@ logger = logging.getLogger()
 TOKEN = "7670540618:AAEWwCquj0h3ErWoWX8OLnv2puMHLozbtBg"
 bot = Application.builder().token(TOKEN).build()
 
-# لود مدل هوش مصنوعی (Mistral 7B)
-model_name = "mistralai/Mistral-7B-Instruct"
+# لود مدل هوش مصنوعی رایگان (mT5-Small که از فارسی پشتیبانی می‌کند)
+model_name = "google/mt5-small"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
-model = AutoModelForCausalLM.from_pretrained(model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
 
 def extract_time(text):
     prompt = f"""
-    متن زیر را تحلیل کن و تاریخ و ساعت دقیق را برگردان.
+    متن زیر را تحلیل کن و تاریخ و ساعت دقیق را استخراج کن.
     اگر متن شامل تاریخ نیست، مقدار None را برگردان.
     متن: "{text}"
     خروجی:
     """
     
     inputs = tokenizer(prompt, return_tensors="pt")
-    outputs = model.generate(**inputs, max_length=50)
+    with torch.no_grad():
+        outputs = model.generate(**inputs, max_length=50)
     parsed_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return dateparser.parse(parsed_text, settings={'PREFER_DATES_FROM': 'future'})
 
