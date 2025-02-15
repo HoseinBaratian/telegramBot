@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
 # گرفتن توکن از متغیر محیطی
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = "7670540618:AAEWwCquj0h3ErWoWX8OLnv2puMHLozbtBg"
 bot = telegram.Bot(token=TOKEN)
 
 # ذخیره‌ی وظایف
