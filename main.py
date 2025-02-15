@@ -1,7 +1,8 @@
 import os
 import logging
 import telegram
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 from apscheduler.schedulers.background import BackgroundScheduler
 import datetime
 import dateparser
@@ -11,18 +12,18 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
 # گرفتن توکن از متغیر محیطی
-TOKEN = "7670540618:AAEWwCquj0h3ErWoWX8OLnv2puMHLozbtBg"
+TOKEN = os.getenv("BOT_TOKEN")  # مقدار رو از متغیر محیطی بگیر
 bot = telegram.Bot(token=TOKEN)
 
 # ذخیره‌ی وظایف
 reminders = {}
 
 # تعریف دستور /start
-def start(update, context):
+def start(update: Update, context: CallbackContext) -> None:
     update.message.reply_text("سلام! من یک بات یادآوری هستم. زمان یادآوری خود را ارسال کنید.")
 
 # ثبت یادآوری
-def set_reminder(update, context):
+def set_reminder(update: Update, context: CallbackContext) -> None:
     text = update.message.text
     chat_id = update.message.chat_id
     date = dateparser.parse(text, settings={'PREFER_DATES_FROM': 'future'})
@@ -48,14 +49,12 @@ scheduler.start()
 
 # تنظیمات تلگرام
 def main():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = Application.builder().token(TOKEN).build()
 
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, set_reminder))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, set_reminder))
 
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == '__main__':
     main()
