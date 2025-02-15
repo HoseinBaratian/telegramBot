@@ -1,6 +1,12 @@
 import logging
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    MessageHandler,
+    filters,  # تغییر از Filters به filters
+    CallbackContext,
+)
 from transformers import pipeline
 import pytz
 from datetime import datetime
@@ -18,7 +24,10 @@ nlp = pipeline("ner", model="dslim/bert-base-NER")
 tasks = {}
 
 # تنظیمات لاگ
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 def start(update: Update, context: CallbackContext) -> None:
@@ -68,7 +77,7 @@ def main() -> None:
 
     # دستورات
     dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, add_task))
+    dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, add_task))  # تغییر از Filters به filters
 
     # شروع بات
     updater.start_polling()
