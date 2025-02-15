@@ -4,6 +4,8 @@ import logging
 import datetime
 import dateparser
 from apscheduler.schedulers.background import BackgroundScheduler
+from transformers import AutoTokenizer, AutoModelForCausalLM
+import torch
 
 # تنظیمات لاگ‌گیری
 logging.basicConfig(level=logging.INFO)
@@ -13,10 +15,28 @@ logger = logging.getLogger()
 TOKEN = "7670540618:AAEWwCquj0h3ErWoWX8OLnv2puMHLozbtBg"
 bot = Application.builder().token(TOKEN).build()
 
+# لود مدل هوش مصنوعی (Mistral 7B)
+model_name = "mistralai/Mistral-7B-Instruct"
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+model = AutoModelForCausalLM.from_pretrained(model_name)
+
+def extract_time(text):
+    prompt = f"""
+    متن زیر را تحلیل کن و تاریخ و ساعت دقیق را برگردان.
+    اگر متن شامل تاریخ نیست، مقدار None را برگردان.
+    متن: "{text}"
+    خروجی:
+    """
+    
+    inputs = tokenizer(prompt, return_tensors="pt")
+    outputs = model.generate(**inputs, max_length=50)
+    parsed_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return dateparser.parse(parsed_text, settings={'PREFER_DATES_FROM': 'future'})
+
 # ذخیره‌ی وظایف
 reminders = {}
 
-# تعریف دستور /start
+# دستور /start
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text("سلام! من یک بات یادآوری هستم. زمان یادآوری خود را ارسال کنید.")
 
@@ -24,7 +44,7 @@ async def start(update: Update, context: CallbackContext):
 async def set_reminder(update: Update, context: CallbackContext):
     text = update.message.text
     chat_id = update.message.chat_id
-    date = dateparser.parse(text, settings={'PREFER_DATES_FROM': 'future'})
+    date = extract_time(text)
 
     if date:
         reminders[chat_id] = date
