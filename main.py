@@ -4,7 +4,7 @@ from telegram.ext import (
     Updater,
     CommandHandler,
     MessageHandler,
-    filters,  # تغییر از Filters به filters
+    filters,
     CallbackContext,
 )
 from transformers import pipeline
@@ -13,6 +13,7 @@ from datetime import datetime
 import schedule
 import time
 import threading
+import torch  # اضافه کردن PyTorch
 
 # توکن بات تلگرام
 TOKEN = '7670540618:AAEWwCquj0h3ErWoWX8OLnv2puMHLozbtBg'
@@ -77,7 +78,7 @@ def main() -> None:
 
     # دستورات
     dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, add_task))  # تغییر از Filters به filters
+    dispatcher.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, add_task))
 
     # شروع بات
     updater.start_polling()
