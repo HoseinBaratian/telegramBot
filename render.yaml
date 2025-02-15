@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: telegram-bot
+    env: python
+    startCommand: sh start.sh
+    plan: free
