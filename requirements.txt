@@ -3,3 +3,4 @@ dateparser
 apscheduler
 transformers
 torch
+tiktoken
