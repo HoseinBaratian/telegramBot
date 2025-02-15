@@ -1,5 +1,3 @@
-import os
-from telegram import Bot
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
 import logging
@@ -12,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 
 # گرفتن توکن از متغیر محیطی
-TOKEN = os.getenv("TOKEN") 
+TOKEN = "7670540618:AAEWwCquj0h3ErWoWX8OLnv2puMHLozbtBg"
 bot = Application.builder().token(TOKEN).build()
 
 # ذخیره‌ی وظایف
