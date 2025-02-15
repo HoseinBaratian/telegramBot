@@ -1,7 +1,4 @@
 python-telegram-bot
-dateparser
-apscheduler
 transformers
-torch
-tiktoken
-blobfile
+pytz
+schedule
