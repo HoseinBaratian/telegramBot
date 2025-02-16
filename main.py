@@ -1,5 +1,7 @@
 import os
-from telegram import Update
+import nest_asyncio
+import asyncio
+from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -7,85 +9,109 @@ from telegram.ext import (
     filters,
     CallbackContext,
 )
-from transformers import pipeline
-import pytz
-from datetime import datetime
-import schedule
-import time
-import threading
 import logging
+import datetime
+import pandas as pd
+import google.generativeai as genai
+import json
+import dateparser
+import jdatetime
 
-# خواندن توکن از متغیر محیطی
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # تغییر این خط
+nest_asyncio.apply()
 
-# مدل زبانی برای استخراج تاریخ و زمان
-nlp = pipeline("ner", model="dslim/bert-base-NER")
+# توکن‌های شما - در حالت واقعی، این مقادیر را در متغیر محیطی ذخیره کنید
+TOKEN = '000'
+API_KEY = '000'
 
-# ذخیره وظایف کاربران
-tasks = {}
+genai.configure(api_key=API_KEY)
 
-# تنظیمات لاگ
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+user_tasks = {}
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ایجاد کیبورد آماده
+def create_reply_keyboard():
+    keyboard = [['اضافه کردن وظیفه جدید'], ['نمایش تسک‌ها']]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+# تابع برای تجزیه متن و پردازش تاریخ
+def parse_task_with_gemini(text):
+    model = genai.GenerativeModel('gemini-pro')
+    prompt = (
+        "Extract the task description from this sentence: '" + text +
+        "'. Return a JSON object with key: description."
+    )
+    response = model.generate_content(prompt)
+    try:
+        result = json.loads(response.text)
+        description = result.get('description', text)
+        
+        # Parse date and time using dateparser
+        parsed_date = dateparser.parse(text, languages=['fa'])
+        if parsed_date:
+            jalali_date = jdatetime.datetime.fromgregorian(datetime=parsed_date)
+            date_str = jalali_date.strftime('%Y-%m-%d')
+            time_str = parsed_date.strftime('%H:%M')
+            return date_str, time_str, description
+        else:
+            return 'نامشخص', 'نامشخص', description
+    except Exception as e:
+        logger.error(f'Error parsing with Gemini: {e}')
+        return 'نامشخص', 'نامشخص', text
+
+# تابع شروع
 async def start(update: Update, context: CallbackContext) -> None:
-    await update.message.reply_text('سلام! من بات To-Do List هستم. می‌تونید کارهای خود را به من بگید و من به شما یادآوری می‌کنم.')
+    keyboard = create_reply_keyboard()
+    await update.message.reply_text(
+        'سلام! لطفا یک گزینه را انتخاب کنید:',
+        reply_markup=keyboard
+    )
 
-def extract_datetime(text):
-    # استخراج تاریخ و زمان از متن کاربر
-    entities = nlp(text)
-    date_time = None
-    for entity in entities:
-        if entity['entity'] == 'DATE' or entity['entity'] == 'TIME':
-            date_time = entity['word']
-            break
-    return date_time
+# تابع نمایش تسک‌ها
+async def show_tasks(update: Update, context: CallbackContext) -> None:
+    user_id = update.message.from_user.id
+    if user_id in user_tasks and not user_tasks[user_id].empty:
+        tasks_str = user_tasks[user_id].to_string(index=False)
+        await update.message.reply_text(f'📋 لیست وظایف شما:\n{tasks_str}')
+    else:
+        await update.message.reply_text('🔹 هنوز وظیفه‌ای ثبت نشده است.')
 
+# تابع اضافه کردن تسک
 async def add_task(update: Update, context: CallbackContext) -> None:
     user_id = update.message.from_user.id
     text = update.message.text
-    date_time = extract_datetime(text)
+    try:
+        day, time, description = parse_task_with_gemini(text)
+        if day == 'نامشخص' or time == 'نامشخص':
+            await update.message.reply_text('❌ نتوانستم تاریخ و زمان را تشخیص دهم. لطفا به فرمت دقیق‌تری بنویسید.')
+            return
+        if user_id not in user_tasks:
+            user_tasks[user_id] = pd.DataFrame(columns=['روز', 'ساعت', 'شرح'])
+        user_tasks[user_id] = pd.concat([
+            user_tasks[user_id],
+            pd.DataFrame({'روز': [day], 'ساعت': [time], 'شرح': [description]})
+        ], ignore_index=True)
+        await update.message.reply_text(f'✅ وظیفه «{description}» برای {day} ساعت {time} ذخیره شد.')
+    except Exception as e:
+        logger.error(f'Error adding task: {e}')
+        await update.message.reply_text('❌ خطا در ثبت وظیفه. دوباره تلاش کنید.')
 
-    if date_time:
-        tasks[user_id] = {'task': text, 'datetime': date_time}
-        await update.message.reply_text(f'کار شما برای {date_time} ذخیره شد.')
-        schedule_reminder(user_id, date_time)
+# تابع مدیریت پیام‌ها
+async def handle_message(update: Update, context: CallbackContext) -> None:
+    text = update.message.text
+    if text == 'اضافه کردن وظیفه جدید':
+        await update.message.reply_text('لطفا وظیفه جدید را وارد کنید:')
+    elif text == 'نمایش تسک‌ها':
+        await show_tasks(update, context)
     else:
-        await update.message.reply_text('متوجه تاریخ و زمان نشدم. لطفاً دوباره تلاش کنید.')
+        await add_task(update, context)
 
-def schedule_reminder(user_id, date_time):
-    # زمان‌بندی ارسال یادآوری
-    reminder_time = datetime.strptime(date_time, '%Y-%m-%d %H:%M:%S')
-    schedule.every().day.at(reminder_time.strftime('%H:%M')).do(send_reminder, user_id)
-
-async def send_reminder(user_id):
-    # ارسال یادآوری به کاربر
-    await context.bot.send_message(chat_id=user_id, text=f'یادآوری: کار شما نزدیک است!')
-
-def run_scheduler():
-    # اجرای زمان‌بندی‌ها
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
+# تابع اصلی
 async def main() -> None:
-    # ایجاد Application به جای Updater
     application = ApplicationBuilder().token(TOKEN).build()
-
-    # دستورات
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, add_task))
-
-    # اجرای زمان‌بندی‌ها در یک thread جداگانه
-    scheduler_thread = threading.Thread(target=run_scheduler)
-    scheduler_thread.start()
-
-    # شروع بات
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     await application.run_polling()
 
 if __name__ == '__main__':
-    import asyncio
     asyncio.run(main())
